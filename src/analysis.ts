@@ -4,12 +4,12 @@ import { updateCharts } from './server.js';
 import { rsi, sma ,macd, bollingerbands} from 'technicalindicators';
 import {DateTime} from 'luxon';
 import {Candle_config,notify} from './tgbot.js';
+import * as dotenv from 'dotenv';
 
-const b_api_key:string='3UbaC4yHrNUYWOa7jgcOUfVOAqhR96rU17l7kfkeRb0JVHetCc1fyVJ3ff2VM2Qs';
-const b_secret_key:string='gkXRy1EaJtBDiHKTrW6nSdIDSXkcCNrx4mIpnG5bThS31IULnDBCENzCSk42IOnk';
+dotenv.config({ path: 'config/.env' });
 
-const b_test_key:string ='07V3W0aLnIZqqYjtSWg5rLCdLrlN1fVNyFGsGTQnAYh83Zd8RoiErJtJjXmzTZxX';
-const b_test_sec_key:string='7gN9ZPF3RESML83OGbvywMLJAX31wg4Pgu88eHHFzA91EgFykv246jVxLyiKxoZ3';
+const b_api_key = process.env.b_api_key!;
+const b_secret_key = process.env.b_secret_key!;
 
 let cid:string;
 let btc_dom_int_id;
@@ -278,9 +278,14 @@ export async function update_acc_balance(){
     }catch(e){
         console.log(e);
         global.current_balance= 0; 
-    }
-    
+    } 
 }
+
+export async function get_statistics(){
+
+}
+
+
 export const update_pair=(pair:string='TNSRUSDT')=>{global.current_pair=pair}
 const get_interval=(intrvl:string):Interval=>{
     switch (intrvl){

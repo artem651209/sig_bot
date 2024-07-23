@@ -21,6 +21,8 @@
     "canvas": "^2.11.2",
     "chart.js": "^3.5.1",
     "chartjs-node-canvas": "^4.1.6",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "fs": "^0.0.1-security",
     "luxon": "^3.4.4",

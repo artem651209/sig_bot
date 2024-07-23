@@ -1,1 +1,3 @@
-node_modules
+out/config/bot-config.json
+out/config/.env
+node_modules/
