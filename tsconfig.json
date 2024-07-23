@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "target": "ESNext", // Устанавливаем целевую версию ECMAScript
+        "module": "ESNext", // Используем ES Modules
+        "moduleResolution": "Node",
+        "outDir": "out",
+        "rootDir": "src", // Корневая директория для исходных файлов
+        "esModuleInterop": true, // Включаем поддержку ES модулям, импортируемым в CommonJS
+        "strict": true, // Включаем строгий режим
+        "skipLibCheck": true, // Пропускаем проверку типов в библиотечных файлах
+        "resolveJsonModule": true, // Позволяет импортировать JSON как модули
+        "forceConsistentCasingInFileNames": true, // Проверка регистра в названиях файлов
+    },
+    "include": ["src/**/*.ts"], // Включаем все файлы TypeScript в директории src
+    "exclude": ["node_modules", "out"] // Исключаем node_modules и out из обработки
+}
+
+

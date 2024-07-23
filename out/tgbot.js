@@ -1,0 +1,361 @@
+import TelegramBot from 'node-telegram-bot-api';
+import * as fs from 'fs';
+import { update_acc_balance, update_pair, processCandles, stop_websocket } from './analysis.js';
+import * as path from 'path';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+const token = '7400797235:AAGe1SpKDRZAUEx5NVYFF5ZcCkeglxRviv0';
+const bot = new TelegramBot(token, { polling: true });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const configDir = path.join(__dirname, 'config');
+const configPath = path.join(configDir, 'bot-config.json');
+const config_path = path.join(__dirname, 'config', 'bot-config.json');
+let temp_candle_config = { candleSize: '1m', quantity: 100, macdPeriods: [12, 26, 9] };
+const edit_window = {
+    reply_markup: {
+        inline_keyboard: [
+            [
+                { text: 'Кол-во выгружаемых свеч', callback_data: 'edit_kline_quantity' }
+            ],
+            [
+                { text: 'MA', callback_data: 'edit_MA' },
+                { text: 'RSI', callback_data: 'edit_RSI' },
+                { text: 'MACD', callback_data: 'edit_MACD' },
+                { text: 'BB', callback_data: 'edit_BB' }
+            ],
+            [
+                { text: 'Сохранить', callback_data: 'save_candle_config' }
+            ],
+            [
+                { text: 'Назад', callback_data: 'back_to_candle_choice' }
+            ]
+        ]
+    }
+};
+const start_choice_window = {
+    reply_markup: {
+        inline_keyboard: [
+            [
+                { text: 'СТАТИСТИКА(пока не выбирай)', callback_data: 'bot_statistics' }
+            ],
+            [
+                { text: 'Выбор пары', callback_data: 'pair_selection' },
+                { text: 'Настройки', callback_data: 'settings' }
+            ],
+            [
+                { text: 'Конфигурация', callback_data: 'check_config' }
+            ],
+            [
+                { text: 'ЗАПУСК!!!!', callback_data: 'start' }
+            ]
+        ]
+    }
+};
+const candle_choice_window = {
+    reply_markup: {
+        inline_keyboard: [
+            [
+                { text: '1 минута', callback_data: '1m' },
+                { text: '15 минут', callback_data: '15m' }
+            ],
+            [
+                { text: '1 час', callback_data: '1h' },
+                { text: '1 день', callback_data: '1d' }
+            ],
+            [
+                { text: 'сохранить конфигурацию', callback_data: 'save_bot_config' }
+            ],
+            [
+                { text: 'Назад', callback_data: 'back_to_start_choice' }
+            ]
+        ]
+    }
+};
+const chatState = {};
+const previousWindows = {};
+const save_candle = (chat_id) => {
+    const candle_index = current_config[chat_id].findIndex(candle => candle.candleSize == temp_candle_config.candleSize);
+    if (candle_index >= 0) {
+        current_config[chat_id][candle_index] = temp_candle_config;
+    }
+    else {
+        current_config[chat_id].push(temp_candle_config);
+    }
+};
+const saveConfig = () => {
+    fs.writeFileSync(configPath, JSON.stringify(current_config, null, 2));
+};
+const ensureChatConfigExists = (chatId) => {
+    if (!current_config[chatId]) {
+        current_config[chatId] = [];
+        saveConfig();
+    }
+};
+const check_candle_completion = () => {
+    const keys = [];
+    Object.entries(temp_candle_config).forEach(([key, value]) => {
+        if (value == undefined || value == 0) {
+            keys.push(key);
+        }
+    });
+    return keys.join(' ');
+};
+function check_config_completion(chat_id) {
+    return current_config[chat_id].length;
+}
+const askQuestion = (chatId, question, state) => {
+    bot.sendMessage(chatId, question);
+    chatState[chatId] = state;
+};
+const loadConfig = () => {
+    if (fs.existsSync(configPath)) {
+        const fileContents = fs.readFileSync(configPath, 'utf-8');
+        return fileContents ? JSON.parse(fileContents) : {};
+    }
+    return {};
+};
+export let current_config = loadConfig();
+bot.onText(/\/start/, async (msg) => {
+    const chatId = msg.chat.id.toString();
+    ensureChatConfigExists(chatId);
+    bot.sendMessage(chatId, 'Привет! Я бот, который анализирует графики и индикаторы на Binance.');
+    update_pair();
+    bot.sendMessage(chatId, `Текущая пара: ${current_pair}`);
+    await update_acc_balance();
+    bot.sendMessage(chatId, `Текущий баланс: ${current_balance}`);
+    if (!current_config[chatId] || current_config[chatId].length === 0) {
+        bot.sendMessage(chatId, 'Бот не настроен, перейди в настройки чтобы создать конфигурацию', start_choice_window);
+    }
+    else {
+        let mess = '\n';
+        current_config[chatId].forEach(conf => {
+            mess += `Интервал выгружаемой свечи: ${conf.candleSize}\n
+                   Количество выгружаемых свечей: ${conf.quantity}\n
+                   MA на графике имеют интервалы: ${conf.movingAverages}\n
+                   Периоды MACD: ${conf.macdPeriods}\n
+                   Период RSI: ${conf.rsiPeriod}\n
+                   Конфигурация лент: Период ${conf.BB_period}, Стад. откл. ${conf.BB_dev}\n`;
+        });
+        bot.sendMessage(chatId, `Бот настроен, вот текущая конфигурация:\n 
+        ${mess}если хочешь что-то изменить, перейди в настройки`, start_choice_window);
+    }
+});
+export function notify(cid, mess) {
+    bot.sendMessage(cid, mess, { parse_mode: "HTML" });
+}
+bot.on('callback_query', (callbackQuery) => {
+    const message = callbackQuery.message;
+    const chatId = callbackQuery.message?.chat.id.toString();
+    const messageId = callbackQuery.message?.message_id;
+    const data = callbackQuery.data;
+    if (!chatId || !messageId)
+        return;
+    switch (data) {
+        case 'pair_selection':
+            askQuestion(chatId, 'Выберите пару...', data);
+            break;
+        case 'bot_statistics':
+            bot.sendMessage(chatId, 'Вы выбрали команду: К боту');
+            // Логика для отображения статистики бота
+            break;
+        case 'settings':
+            if (!current_config[chatId] || current_config[chatId].length === 0) {
+                previousWindows[chatId] = 'start_choice_window';
+                bot.editMessageText('Давай создадим конфигурацию, выбери вид свечи', {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    reply_markup: candle_choice_window.reply_markup
+                });
+            }
+            else {
+                previousWindows[chatId] = 'start_choice_window';
+                bot.editMessageText('Бот настроен, но если хочешь что-то изменить, прошу', {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    reply_markup: candle_choice_window.reply_markup
+                });
+            }
+            break;
+        case 'edit_kline_quantity':
+            askQuestion(chatId, 'Отправь количество свечей для отображения', data);
+            break;
+        case 'edit_MA':
+            askQuestion(chatId, 'Отправь периоды скользящих средних через пробел (небольшое напоминание, период должен быть меньше количества отображаемых свечей)', data);
+            break;
+        case 'edit_RSI':
+            askQuestion(chatId, 'Отправь период для расчета RSI', data);
+            break;
+        case 'edit_MACD':
+            askQuestion(chatId, 'Отправь периоды линий MACD в таком порядке: Период для быстрой EMA, Период для медленной EMA, Период для сигнальной линии. Пример: 12 26 9', data);
+            break;
+        case 'edit_BB':
+            askQuestion(chatId, 'Отправь Период лент Боллинджера и Стандартное отклонение. Пример: 20 2', data);
+            break;
+        case "1m":
+        case "15m":
+        case "1h":
+        case "1d":
+            current_config = loadConfig();
+            const candle_found = current_config[chatId].find(candle => candle.candleSize === data);
+            if (candle_found) {
+                temp_candle_config = candle_found;
+            }
+            else {
+                temp_candle_config = { candleSize: data, quantity: 100, macdPeriods: [12, 26, 9] };
+            }
+            previousWindows[chatId] = 'candle_choice_window';
+            bot.editMessageText(`Сейчас редактируем свечу типа ${data}. Что устанавливаем?`, {
+                chat_id: chatId,
+                message_id: messageId,
+                reply_markup: edit_window.reply_markup
+            });
+            break;
+        case 'save_candle_config':
+            const params = check_candle_completion();
+            if (params.length > 1) {
+                bot.editMessageText(`Пропустил эти параметры ${params}, заполни потом сохраняй!!!!`, {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    reply_markup: edit_window.reply_markup
+                });
+            }
+            else {
+                save_candle(chatId);
+                const saved_candle_type = temp_candle_config.candleSize;
+                bot.editMessageText(`Успешно сохранена свеча типа ${saved_candle_type}. Если хочешь, можешь добавить ещё свечи, выбирай, или жми сохранить конфигурацию и запускай бота!`, {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    reply_markup: candle_choice_window.reply_markup
+                });
+            }
+            break;
+        case 'save_bot_config':
+            if (check_config_completion(chatId) > 0) {
+                saveConfig();
+                bot.editMessageText('Конфигурация сохранена', {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    reply_markup: start_choice_window.reply_markup
+                });
+            }
+            else {
+                bot.editMessageText('Добавь хотя бы одну свечу!!!!', {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    reply_markup: candle_choice_window.reply_markup
+                });
+            }
+            break;
+        case 'check_config':
+            let mess = '\n';
+            current_config = loadConfig();
+            current_config[chatId].forEach(conf => {
+                mess += `Интервал выгружаемой свечи: ${conf.candleSize}\n
+                       Количество выгружаемых свечей: ${conf.quantity}\n
+                       MA на графике имеют интервалы: ${conf.movingAverages}\n
+                       Периоды MACD: ${conf.macdPeriods}\n
+                       Период RSI: ${conf.rsiPeriod}\n
+                       Конфигурация лент: Период ${conf.BB_period}, Стад. откл. ${conf.BB_dev}\n`;
+            });
+            bot.sendMessage(chatId, `Текущая конфигурация:\n 
+            ${mess}если хочешь что-то изменить, перейди в настройки`, start_choice_window);
+            break;
+        case 'back_to_start_choice':
+            bot.editMessageText('начальника, приказывайте', {
+                chat_id: chatId,
+                message_id: messageId,
+                reply_markup: start_choice_window.reply_markup
+            });
+            break;
+        case 'back_to_candle_choice':
+            bot.editMessageText('Выбери вид свечи', {
+                chat_id: chatId,
+                message_id: messageId,
+                reply_markup: candle_choice_window.reply_markup
+            });
+            break;
+        case 'start':
+            current_config = loadConfig();
+            processCandles(current_config[chatId], chatId);
+            bot.editMessageText(`Переходи по ссылочке чтобы графики открылись:\n<code>http://localhost:3000/1m</code>\n
+                Это самая базовая ссылочка, если хочешь открыть другой вид свечи замени (1m) на нужный интервал (главное чтобы он был в конфигурации).\n
+                Можно открывать одновременно несколько, есличо`, {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: "HTML",
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: 'ОСТАНОВИТЬ!!!', callback_data: 'stop' }]
+                    ]
+                }
+            });
+            break;
+        case 'stop':
+            stop_websocket();
+            bot.editMessageText('Подключение к бирже остановлено, можешь свободно корректировать конфигурацию и перезапускать', {
+                chat_id: chatId,
+                message_id: messageId,
+                reply_markup: start_choice_window.reply_markup
+            });
+            break;
+    }
+});
+bot.on('message', (msg) => {
+    const chatId = msg.chat.id.toString();
+    const text = msg.text || '';
+    if (!chatState[chatId])
+        return;
+    switch (chatState[chatId]) {
+        case 'pair_selection':
+            update_pair(text);
+            bot.sendMessage(chatId, `Пара обновлена на ${text}`);
+            break;
+        case 'edit_kline_quantity':
+            try {
+                temp_candle_config.quantity = parseInt(text);
+                bot.sendMessage(chatId, `Количество выгружаемых свечей = ${temp_candle_config.quantity}. Редактируем дальше?`, edit_window);
+            }
+            catch (e) {
+                bot.sendMessage(chatId, `Что-то пошло не так, попробуй отправить ещё раз, тупо цифру`);
+            }
+            break;
+        case 'edit_MA':
+            try {
+                temp_candle_config.movingAverages = text.split(' ').map(Number);
+                bot.sendMessage(chatId, `Периоды скользящих средних: ${temp_candle_config.movingAverages.join(', ')}. Редактируем дальше?`, edit_window);
+            }
+            catch (e) {
+                bot.sendMessage(chatId, `Что-то пошло не так, попробуй отправить ещё раз, тупо цифры через пробел`);
+            }
+            break;
+        case 'edit_RSI':
+            try {
+                temp_candle_config.rsiPeriod = parseInt(text);
+                bot.sendMessage(chatId, `Период RSI = ${temp_candle_config.rsiPeriod}. Редактируем дальше?`, edit_window);
+            }
+            catch (e) {
+                bot.sendMessage(chatId, `Что-то пошло не так, попробуй отправить ещё раз, тупо цифру`);
+            }
+            break;
+        case 'edit_MACD':
+            try {
+                temp_candle_config.macdPeriods = text.split(' ').map(Number);
+                bot.sendMessage(chatId, `Периоды MACD: Быстрая EMA = ${temp_candle_config.macdPeriods[0]}, Медленная EMA = ${temp_candle_config.macdPeriods[1]}, Сигнальная линия = ${temp_candle_config.macdPeriods[2]}. Редактируем дальше?`, edit_window);
+            }
+            catch (e) {
+                bot.sendMessage(chatId, `Что-то пошло не так, попробуй отправить ещё раз, тупо цифры через пробел`);
+            }
+            break;
+        case 'edit_BB':
+            try {
+                const bb_arr = text.split(' ').map(Number);
+                temp_candle_config.BB_period = bb_arr[0];
+                temp_candle_config.BB_dev = bb_arr[1];
+                bot.sendMessage(chatId, `Период лент: ${temp_candle_config.BB_period}, Стандартное отклонение лент: ${temp_candle_config.BB_dev}. Редактируем дальше?`, edit_window);
+            }
+            catch (e) {
+                bot.sendMessage(chatId, `Что-то пошло не так, попробуй отправить ещё раз, тупо цифры через пробел`);
+            }
+    }
+});

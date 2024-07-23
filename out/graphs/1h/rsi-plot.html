@@ -1,0 +1,15 @@
+
+        <html>
+        <head>
+            <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        </head>
+        <body>
+            <div id="plotly-div" style="width:100%;height:100%;"></div>
+            <script>
+                const data = [];
+                const layout = {"title":"RSI (1h)","xaxis":{"title":"Time"},"yaxis":{"title":"RSI Value"},"showlegend":true};
+                Plotly.newPlot('plotly-div', data, layout);
+            </script>
+        </body>
+        </html>
+    
