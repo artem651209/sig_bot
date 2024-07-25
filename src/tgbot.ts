@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import * as fs from 'fs';
-import { update_acc_balance, update_pair, processCandles, stop_websocket } from './analysis.js';
+import { update_acc_balance, update_pair, processCandles, stop_websocket, get_statistics } from './analysis.js';
 import * as path from 'path';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -29,7 +29,11 @@ export interface Bot_Config {
 
 const config_path: string = path.join(__dirname, 'config', 'bot-config.json');
 let temp_candle_config: Candle_config = { candleSize: '1m', quantity: 100, macdPeriods: [12, 26, 9] };
+interface ChatMessageIds {
+    [chatId: string]: number[];
+}
 
+let chatMessageIds: ChatMessageIds = {};
 const edit_window = {
     reply_markup: {
         inline_keyboard: [
@@ -149,7 +153,7 @@ bot.onText(/\/start/,async  (msg) => {
     bot.sendMessage(chatId, 'Привет! Я бот, который анализирует графики и индикаторы на Binance.');
     update_pair();
     bot.sendMessage(chatId, `Текущая пара: ${current_pair}`);
-    await update_acc_balance();
+    await update_acc_balance(true);
     bot.sendMessage(chatId, `Текущий баланс: ${current_balance}`);
     if (!current_config[chatId] || current_config[chatId].length === 0) {
         bot.sendMessage(chatId, 'Бот не настроен, перейди в настройки чтобы создать конфигурацию', start_choice_window);
@@ -169,7 +173,12 @@ bot.onText(/\/start/,async  (msg) => {
 });
 
 export function notify(cid: string, mess: string): void {
-    bot.sendMessage(cid, mess, { parse_mode: "HTML" });
+    bot.sendMessage(cid, mess, { parse_mode: "HTML" }).then((sentMessage) => {
+        // Store the message ID
+        if (!chatMessageIds[cid]) {
+            chatMessageIds[cid] = [];
+        }
+        chatMessageIds[cid].push(sentMessage.message_id)});
 }
 
 bot.on('callback_query', (callbackQuery) => {
@@ -332,7 +341,16 @@ bot.on('callback_query', (callbackQuery) => {
 
         case 'stop':
             stop_websocket();
-            bot.editMessageText('Подключение к бирже остановлено, можешь свободно корректировать конфигурацию и перезапускать', {
+            if (chatMessageIds[chatId]) {
+                chatMessageIds[chatId].forEach((msgId) => {
+                    bot.deleteMessage(chatId, msgId).catch((error) => {
+                        console.error(`Failed to delete message ${msgId}: `, error);
+                    });
+                });
+                chatMessageIds[chatId] = [];
+            }
+            let stat_message = get_statistics();
+            bot.editMessageText(`Подключение к бирже остановлено, можешь свободно корректировать конфигурацию и перезапускать.\n Данные о сессии\n${stat_message}`, {
                 chat_id: chatId,
                 message_id: messageId,
                 reply_markup: start_choice_window.reply_markup

@@ -8,8 +8,8 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: 'config/.env' });
 
-const b_api_key = process.env.b_api_key!;
-const b_secret_key = process.env.b_secret_key!;
+const b_api_key = process.env.B_API_KEY;
+const b_secret_key = process.env.B_SEC_KEY;
 
 let cid:string;
 let btc_dom_int_id;
@@ -133,7 +133,10 @@ async function btc_dominance_state():Promise<void>{
         previousBtcPrice=curr_btc_p;
     },3600000)
 }
-const lastSignals: { [interv: string]: { macd: 'up' | 'down' | null, rsi: 'up' | 'down' | null } } = {};
+const lastSignals: { [interv: string]: { macd: 'up' | 'down' | null, 
+                                         rsi: 'up' | 'down' | null ,
+                                         bb_x:'top'|'bot'|null,
+                                         bb_ce:'-><-'|'<-->'|null } } = {};
 async function signal_pattern(kline:Candle,interv:string){
     const macd_length=kline.macd.length;
     const cur_macd=kline.macd[macd_length-1];
@@ -141,11 +144,19 @@ async function signal_pattern(kline:Candle,interv:string){
     const rsi_length=kline.rsi.values.length;
     const cur_rsi=kline.rsi.values[rsi_length-1];
     const prev_rsi=kline.rsi.values[rsi_length-2];
+    const prev_price=kline.close_prices[kline.close_prices.length-2];
+    const cur_price=kline.close_prices[kline.close_prices.length-1];
+    const bb_uppers=[kline.bb![kline.bb!.length-1]._upper!,kline.bb![kline.bb!.length-2]._upper!]
+    const bb_lowers=[kline.bb![kline.bb!.length-1]._lower!,kline.bb![kline.bb!.length-2]._lower!]
     const signals = {
         macd_up: prev_macd._macd! <= prev_macd._signal! && cur_macd._macd! > cur_macd._signal!,
         macd_down: prev_macd._macd! >= prev_macd._signal! && cur_macd._macd! < cur_macd._signal!,
         rsi_up: prev_rsi <= 30 && cur_rsi > 30,
         rsi_down: prev_rsi >= 70 && cur_rsi < 70,
+        bb_x_top:cur_price>bb_uppers[0]&& prev_price<=bb_uppers[1],
+        bb_x_bot:cur_price<bb_lowers[0] && prev_price>=bb_lowers[1],
+        bb_contr:bb_uppers[1]-bb_lowers[1]>bb_uppers[0]-bb_lowers[0],
+        bb_expan:bb_uppers[1]-bb_lowers[1]<bb_uppers[0]-bb_lowers[0]
     };
 
     const interval = interv;
@@ -153,6 +164,8 @@ async function signal_pattern(kline:Candle,interv:string){
         lastSignals[interval] = {
             macd: null,
             rsi: null,
+            bb_x:null,
+            bb_ce:null
         };
     }
 
@@ -177,6 +190,28 @@ async function signal_pattern(kline:Candle,interv:string){
         if (lastSignals[interval].rsi !== 'down') {
             notify(cid, `На свече с интервалом ${interval} RSI ПРОБИЛО УРОВЕНЬ СОПРОТИВЛЕНИЯ СВЕРХУ ВНИЗ.\n\nВОЗМОЖНО ПОРА ПРОДАВАТЬ\nПроверить можешь на графике:\n <code>http://localhost:3000/${interval}</code>\n`);
             lastSignals[interval].rsi = 'down';
+        }
+    }
+    if(signals.bb_x_top){
+        if(lastSignals[interval].bb_x!='top'){
+            notify(cid, `На свече с интервалом ${interval} график цены пересёк ВЕРХНЮЮ ленту СНИЗУ ВВЕРХ.\n\nВОЗМОЖНО ПОРА ПРОДАВАТЬ\nПроверить можешь на графике:\n <code>http://localhost:3000/${interval}</code>\n`);
+            lastSignals[interval].bb_x = 'top';
+        }
+    }else if(signals.bb_x_bot){
+        if(lastSignals[interval].bb_x!='bot'){
+            notify(cid, `На свече с интервалом ${interval} график цены пересёк НИЖНЮЮ ленту СВЕРХУ ВНИЗ.\n\nВОЗМОЖНО ПОРА ПОКУПАТЬ\nПроверить можешь на графике:\n <code>http://localhost:3000/${interval}</code>\n`);
+            lastSignals[interval].bb_x = 'bot';
+        }
+    }
+    if(signals.bb_contr){
+        if(lastSignals[interval].bb_ce!='-><-'){
+            notify(cid, `На свече с интервалом ${interval} ЛЕНТЫ начали СУЖАТЬСЯ.\n\nОЖИДАЕТСЯ СИЛЬНОЕ ДВИЖЕНИЕ ЦЕНЫ\nПроверить можешь на графике:\n <code>http://localhost:3000/${interval}</code>\n`);
+            lastSignals[interval].bb_ce = '-><-';
+        }
+    }else if(signals.bb_expan){
+        if(lastSignals[interval].bb_ce!='<-->'){
+            notify(cid, `На свече с интервалом ${interval} ЛЕНТЫ начали РАСХОДИТЬСЯ.\n\nСИЛЬНОЕ ДВИЖЕНИЕ ЦЕНЫ ПОДТВЕРЖДАЕТСЯ\nПроверить можешь на графике:\n <code>http://localhost:3000/${interval}</code>\n`);
+            lastSignals[interval].bb_ce = '<-->';
         }
     }
 }
@@ -209,6 +244,7 @@ wsClient.on('message', async (data) => {
 declare global{
     var current_pair:string;
     var current_balance:number;
+    var prev_balance:number;
 }
 
 let klines:Candle[]=[];
@@ -216,7 +252,6 @@ let klines:Candle[]=[];
 async function start_g_a(current_candle:Candle) {
     let close_p:number[];
     let close_t:string[];
-    
     [close_p,close_t]=await get_kline_data(current_candle);
     current_candle.close_prices=close_p;
     current_candle.close_time=close_t;
@@ -269,23 +304,27 @@ async function get_kline_data(kline:Candle): Promise< [number[], string[]] >  {
     const close_t:string[]=historical_klines.map((kline: number[]) => {return DateTime.fromMillis(kline[6]).toISO()});
     return [close_p,close_t];
 }
-export async function update_acc_balance(){
+export async function update_acc_balance(start:boolean):Promise<void>{
     try{
         const acc =  await api_client.accountInformation();
         let acc_info =acc.balances; 
         let cur_ass=acc_info.find(ass=>ass.asset==current_pair.slice(0,-4))!;
-        global.current_balance = cur_ass==undefined?0:parseFloat(cur_ass.free);  
+        global.current_balance = cur_ass==undefined?0:parseFloat(cur_ass.free); 
+        if(start && !global.prev_balance){
+            global.prev_balance=global.current_balance;
+        }
     }catch(e){
         console.log(e);
         global.current_balance= 0; 
     } 
 }
 
-export async function get_statistics(){
-
+export function get_statistics(){
+    update_acc_balance(false);
+    const diff =global.current_balance - global.prev_balance
+    const pdiff=(diff/global.prev_balance)*100;
+    return `До запуска баланс выбранной монет составлял: ${global.prev_balance}\n Cейчас он составляет: ${global.current_balance}\n Разница: ${pdiff.toFixed(2)}%`
 }
-
-
 export const update_pair=(pair:string='TNSRUSDT')=>{global.current_pair=pair}
 const get_interval=(intrvl:string):Interval=>{
     switch (intrvl){
