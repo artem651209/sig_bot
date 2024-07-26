@@ -46,8 +46,8 @@ export interface Candle{
     }
     bb?:BollBands[];
 }
-const api_client:Spot=new Spot(b_api_key,b_secret_key,{baseURL:'https://testnet.binance.vision'});//
-const wsClient:WebsocketClient = new WebsocketClient({api_key: b_api_key,api_secret: b_secret_key,beautify:false,wsUrl:'wss://stream.testnet.binance.vision/ws'});//
+const api_client:Spot=new Spot(b_api_key,b_secret_key);//,{baseURL:'https://testnet.binance.vision'}
+const wsClient:WebsocketClient = new WebsocketClient({api_key: b_api_key,api_secret: b_secret_key,beautify:false});//,wsUrl:'wss://stream.testnet.binance.vision/ws'
 
 wsClient.on('open', (data) => {
 console.log('connection opened open');
@@ -229,6 +229,14 @@ wsClient.on('message', async (data) => {
             cur_kl.close_prices.push(clp);
             cur_kl.close_time.shift();
             cur_kl.close_time.push(ws_kl_et);
+            if (!lastSignals[ws_kline.i]) {
+                lastSignals[ws_kline.i] = {
+                    macd: null,
+                    rsi: null,
+                    bb_x:null,
+                    bb_ce:null
+                };
+            }
             move_flag=true;
         }else{
             cur_kl.close_prices[last_element]=clp;

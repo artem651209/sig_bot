@@ -6,11 +6,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: 'out/config/.env' });
-console.log(`TG_TOKEN: ${process.env.TG_TOKEN}`);
 const token = process.env.TG_TOKEN;
-if (!token) {
-    throw new Error("Telegram Bot Token not provided!");
-}
 const bot = new TelegramBot(token, { polling: true });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
