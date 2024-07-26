@@ -4,7 +4,13 @@ import { update_acc_balance, update_pair, processCandles, stop_websocket, get_st
 import * as path from 'path';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
-const token = '7400797235:AAGe1SpKDRZAUEx5NVYFF5ZcCkeglxRviv0';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: 'out/config/.env' });
+console.log(`TG_TOKEN: ${process.env.TG_TOKEN}`);
+const token = process.env.TG_TOKEN;
+if (!token) {
+    throw new Error("Telegram Bot Token not provided!");
+}
 const bot = new TelegramBot(token, { polling: true });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

@@ -4,8 +4,11 @@ import { update_acc_balance, update_pair, processCandles, stop_websocket, get_st
 import * as path from 'path';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import * as dotenv from 'dotenv';
 
-const token: string = '7400797235:AAGe1SpKDRZAUEx5NVYFF5ZcCkeglxRviv0';
+dotenv.config({ path: 'out/config/.env' });
+const token = process.env.TG_TOKEN!;
+
 const bot: TelegramBot = new TelegramBot(token, { polling: true });
 
 const __filename = fileURLToPath(import.meta.url);

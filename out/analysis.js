@@ -5,13 +5,13 @@ import { rsi, sma, macd, bollingerbands } from 'technicalindicators';
 import { DateTime } from 'luxon';
 import { notify } from './tgbot.js';
 import * as dotenv from 'dotenv';
-dotenv.config({ path: 'config/.env' });
+dotenv.config({ path: 'out/config/.env' });
 const b_api_key = process.env.B_API_KEY;
 const b_secret_key = process.env.B_SEC_KEY;
 let cid;
 let btc_dom_int_id;
-const api_client = new Spot(b_api_key, b_secret_key); //,{baseURL:'https://testnet.binance.vision'}
-const wsClient = new WebsocketClient({ api_key: b_api_key, api_secret: b_secret_key, beautify: false }); //,wsUrl:'wss://stream.testnet.binance.vision/ws'});
+const api_client = new Spot(b_api_key, b_secret_key, { baseURL: 'https://testnet.binance.vision' }); //
+const wsClient = new WebsocketClient({ api_key: b_api_key, api_secret: b_secret_key, beautify: false, wsUrl: 'wss://stream.testnet.binance.vision/ws' }); //
 wsClient.on('open', (data) => {
     console.log('connection opened open');
 });

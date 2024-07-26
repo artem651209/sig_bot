@@ -6,11 +6,10 @@ import {DateTime} from 'luxon';
 import {Candle_config,notify} from './tgbot.js';
 import * as dotenv from 'dotenv';
 
-dotenv.config({ path: 'config/.env' });
+dotenv.config({ path: 'out/config/.env' });
 
 const b_api_key = process.env.B_API_KEY;
 const b_secret_key = process.env.B_SEC_KEY;
-
 let cid:string;
 let btc_dom_int_id;
 interface FibonacciLevels{
@@ -47,9 +46,8 @@ export interface Candle{
     }
     bb?:BollBands[];
 }
-const api_client:Spot=new Spot(b_api_key,b_secret_key);//,{baseURL:'https://testnet.binance.vision'}
-
-const wsClient:WebsocketClient = new WebsocketClient({api_key: b_api_key,api_secret: b_secret_key,beautify:false});//,wsUrl:'wss://stream.testnet.binance.vision/ws'});
+const api_client:Spot=new Spot(b_api_key,b_secret_key,{baseURL:'https://testnet.binance.vision'});//
+const wsClient:WebsocketClient = new WebsocketClient({api_key: b_api_key,api_secret: b_secret_key,beautify:false,wsUrl:'wss://stream.testnet.binance.vision/ws'});//
 
 wsClient.on('open', (data) => {
 console.log('connection opened open');
