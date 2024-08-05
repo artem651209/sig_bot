@@ -359,6 +359,7 @@ export async function upd_acc_info(start) {
                 }
             }
             current_account.prev_balance = current_account.base_balance;
+            console.log(current_account);
         }
         else {
             let base_ass = acc_info.find(ass => ass.asset === current_account.base_curr);

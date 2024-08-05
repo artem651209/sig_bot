@@ -13,7 +13,7 @@ let b_secret_key;
 let api_client:Spot;
 let candleWS:WebsocketClient;
 let userWS:WebsocketClient;
-const use_test=true;
+const use_test=false;
 if(use_test){
     b_api_key = process.env.B_TEST_KEY;
     b_secret_key= process.env.B_TEST_SEC_KEY;
@@ -343,6 +343,7 @@ export async function upd_acc_info(start:boolean):Promise<void>{
                 current_account.quote_balance=parseFloat(quote_ass.free);}
             }
             current_account.prev_balance = current_account.base_balance;
+            console.log(current_account)
         }else{
             let base_ass = acc_info.find(ass => ass.asset === current_account.base_curr);
             let quote_ass=acc_info.find(ass => ass.asset === current_account.quote_curr);
