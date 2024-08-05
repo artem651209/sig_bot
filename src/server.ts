@@ -1,7 +1,8 @@
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
-import { Candle, get_kline,updateMAS } from './analysis.js';
+import {  get_kline,updateMAS ,placeUserOrder, get_account} from './analysis.js';
+import {Candle,acc_Data} from './contracts.js';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -23,11 +24,11 @@ intervals.forEach(interval => {
 });
 
 io.on('connection', (socket) => {
-    console.log('a user connected');
     const { interval } = socket.handshake.query;
     if(!Array.isArray(interval)){
         const initial_data=get_kline(interval!)!
-        io.emit('showInitialData', initial_data);
+        const initial_acc=get_account();
+        io.emit('showInitialData', initial_data,initial_acc);
     }
     socket.on('disconnect', () => {
         console.log('user disconnected');
@@ -35,14 +36,19 @@ io.on('connection', (socket) => {
     socket.on('addMA', async (data) => {
         const { period, interval } = data;
         await updateMAS(period, interval);
-        
     });
+    socket.on('palceOrder',async (data)=>{
+        placeUserOrder(data);
+    })
+    console.log('a user connected');
 });
 
 export function updateCharts(candle: Candle, moved: boolean) {
     io.emit('update', candle, moved);
 }
-
+export function updateBalances(acc_info:acc_Data){
+    io.emit('upd_acc',acc_info)
+}
 server.listen(3000, () => {
     console.log('listening on *:3000');
 });

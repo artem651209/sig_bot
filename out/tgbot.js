@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import * as fs from 'fs';
-import { update_acc_balance, update_pair, processCandles, stop_websocket, get_statistics } from './analysis.js';
+import { upd_acc_info, processCandles, stop_websocket, get_statistics, current_account, update_pair } from './analysis.js';
 import * as path from 'path';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -78,34 +78,22 @@ const candle_choice_window = {
 const chatState = {};
 const previousWindows = {};
 const save_candle = (chat_id) => {
-    const candle_index = current_config[chat_id].findIndex(candle => candle.candleSize == temp_candle_config.candleSize);
+    const candle_index = current_config[chat_id].cc.findIndex(candle => candle.candleSize == temp_candle_config.candleSize);
     if (candle_index >= 0) {
-        current_config[chat_id][candle_index] = temp_candle_config;
+        current_config[chat_id].cc[candle_index] = temp_candle_config;
     }
     else {
-        current_config[chat_id].push(temp_candle_config);
+        current_config[chat_id].cc.push(temp_candle_config);
     }
 };
 const saveConfig = () => {
     fs.writeFileSync(configPath, JSON.stringify(current_config, null, 2));
 };
-const ensureChatConfigExists = (chatId) => {
-    if (!current_config[chatId]) {
-        current_config[chatId] = [];
-        saveConfig();
-    }
-};
-const check_candle_completion = () => {
-    const keys = [];
-    Object.entries(temp_candle_config).forEach(([key, value]) => {
-        if (value == undefined || value == 0) {
-            keys.push(key);
-        }
-    });
-    return keys.join(' ');
-};
+function notify_atem(text) {
+    bot.sendMessage("304470538", text);
+}
 function check_config_completion(chat_id) {
-    return current_config[chat_id].length;
+    return current_config[chat_id].cc.length;
 }
 const askQuestion = (chatId, question, state) => {
     bot.sendMessage(chatId, question);
@@ -121,32 +109,34 @@ const loadConfig = () => {
 export let current_config = loadConfig();
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id.toString();
-    ensureChatConfigExists(chatId);
-    bot.sendMessage(chatId, 'Привет! Я бот, который анализирует графики и индикаторы на Binance.');
-    update_pair();
-    bot.sendMessage(chatId, `Текущая пара: ${current_pair}`);
-    await update_acc_balance(true);
-    bot.sendMessage(chatId, `Текущий баланс: ${current_balance}`);
-    if (!current_config[chatId] || current_config[chatId].length === 0) {
-        bot.sendMessage(chatId, 'Бот не настроен, перейди в настройки чтобы создать конфигурацию', start_choice_window);
-    }
-    else {
-        let mess = '\n';
-        current_config[chatId].forEach(conf => {
-            mess += `Интервал выгружаемой свечи: ${conf.candleSize}\n
-                   Количество выгружаемых свечей: ${conf.quantity}\n
-                   MA на графике имеют интервалы: ${conf.movingAverages}\n
-                   Периоды MACD: ${conf.macdPeriods}\n
-                   Период RSI: ${conf.rsiPeriod}\n
-                   Конфигурация лент: Период ${conf.BB_period}, Стад. откл. ${conf.BB_dev}\n`;
-        });
-        bot.sendMessage(chatId, `Бот настроен, вот текущая конфигурация:\n 
-        ${mess}если хочешь что-то изменить, перейди в настройки`, start_choice_window);
-    }
+    notify_atem(`прошлая комманда старт у ${chatId}`);
+    await update_pair(current_config[chatId].pair);
+    await upd_acc_info(true);
+    bot.sendMessage(chatId, 'Привет! Я бот, который анализирует графики и индикаторы на Binance.').then(() => {
+        return bot.sendMessage(chatId, `Текущая пара: ${current_config[chatId].pair}`);
+    }).then(() => {
+        bot.sendMessage(chatId, `Текущий баланс: ${current_account.base_balance}`);
+    }).then(() => {
+        if (!current_config[chatId].cc || current_config[chatId].cc.length === 0) {
+            return bot.sendMessage(chatId, 'Бот не настроен, перейди в настройки чтобы создать конфигурацию', start_choice_window);
+        }
+        else {
+            let mess = '\n';
+            current_config[chatId].cc.forEach(conf => {
+                mess += `Интервал выгружаемой свечи: ${conf.candleSize}\n
+                    Количество выгружаемых свечей: ${conf.quantity}\n
+                    MA на графике имеют интервалы: ${conf.movingAverages}\n
+                    Периоды MACD: ${conf.macdPeriods}\n
+                    Период RSI: ${conf.rsiPeriod}\n
+                    Конфигурация лент: Период ${conf.BB_period}, Стад. откл. ${conf.BB_dev}\n`;
+            });
+            return bot.sendMessage(chatId, `Бот настроен, вот текущая конфигурация:\n 
+            ${mess}если хочешь что-то изменить, перейди в настройки`, start_choice_window);
+        }
+    });
 });
 export function notify(cid, mess) {
     bot.sendMessage(cid, mess, { parse_mode: "HTML" }).then((sentMessage) => {
-        // Store the message ID
         if (!chatMessageIds[cid]) {
             chatMessageIds[cid] = [];
         }
@@ -166,10 +156,9 @@ bot.on('callback_query', (callbackQuery) => {
             break;
         case 'bot_statistics':
             bot.sendMessage(chatId, 'Вы выбрали команду: К боту');
-            // Логика для отображения статистики бота
             break;
         case 'settings':
-            if (!current_config[chatId] || current_config[chatId].length === 0) {
+            if (!current_config[chatId].cc || current_config[chatId].cc.length === 0) {
                 previousWindows[chatId] = 'start_choice_window';
                 bot.editMessageText('Давай создадим конфигурацию, выбери вид свечи', {
                     chat_id: chatId,
@@ -206,7 +195,7 @@ bot.on('callback_query', (callbackQuery) => {
         case "1h":
         case "1d":
             current_config = loadConfig();
-            const candle_found = current_config[chatId].find(candle => candle.candleSize === data);
+            const candle_found = current_config[chatId].cc.find(candle => candle.candleSize === data);
             if (candle_found) {
                 temp_candle_config = candle_found;
             }
@@ -221,23 +210,13 @@ bot.on('callback_query', (callbackQuery) => {
             });
             break;
         case 'save_candle_config':
-            const params = check_candle_completion();
-            if (params.length > 1) {
-                bot.editMessageText(`Пропустил эти параметры ${params}, заполни потом сохраняй!!!!`, {
-                    chat_id: chatId,
-                    message_id: messageId,
-                    reply_markup: edit_window.reply_markup
-                });
-            }
-            else {
-                save_candle(chatId);
-                const saved_candle_type = temp_candle_config.candleSize;
-                bot.editMessageText(`Успешно сохранена свеча типа ${saved_candle_type}. Если хочешь, можешь добавить ещё свечи, выбирай, или жми сохранить конфигурацию и запускай бота!`, {
-                    chat_id: chatId,
-                    message_id: messageId,
-                    reply_markup: candle_choice_window.reply_markup
-                });
-            }
+            save_candle(chatId);
+            const saved_candle_type = temp_candle_config.candleSize;
+            bot.editMessageText(`Успешно сохранена свеча типа ${saved_candle_type}. Если хочешь, можешь добавить ещё свечи, выбирай, или жми сохранить конфигурацию и запускай бота!`, {
+                chat_id: chatId,
+                message_id: messageId,
+                reply_markup: candle_choice_window.reply_markup
+            });
             break;
         case 'save_bot_config':
             if (check_config_completion(chatId) > 0) {
@@ -259,7 +238,7 @@ bot.on('callback_query', (callbackQuery) => {
         case 'check_config':
             let mess = '\n';
             current_config = loadConfig();
-            current_config[chatId].forEach(conf => {
+            current_config[chatId].cc.forEach(conf => {
                 mess += `Интервал выгружаемой свечи: ${conf.candleSize}\n
                        Количество выгружаемых свечей: ${conf.quantity}\n
                        MA на графике имеют интервалы: ${conf.movingAverages}\n
@@ -286,7 +265,8 @@ bot.on('callback_query', (callbackQuery) => {
             break;
         case 'start':
             current_config = loadConfig();
-            processCandles(current_config[chatId], chatId);
+            notify_atem("бот был запущен");
+            processCandles(current_config[chatId].cc, current_config[chatId].pair, chatId);
             bot.editMessageText(`Переходи по ссылочке чтобы графики открылись:\n<code>http://localhost:3000/1m</code>\n
                 Это самая базовая ссылочка, если хочешь открыть другой вид свечи замени (1m) на нужный интервал (главное чтобы он был в конфигурации).\n
                 Можно открывать одновременно несколько, есличо`, {
@@ -302,6 +282,7 @@ bot.on('callback_query', (callbackQuery) => {
             break;
         case 'stop':
             stop_websocket();
+            notify_atem("Бот был остановлен");
             if (chatMessageIds[chatId]) {
                 chatMessageIds[chatId].forEach((msgId) => {
                     bot.deleteMessage(chatId, msgId).catch((error) => {
@@ -326,8 +307,9 @@ bot.on('message', (msg) => {
         return;
     switch (chatState[chatId]) {
         case 'pair_selection':
-            update_pair(text);
+            current_config[chatId].pair = text;
             bot.sendMessage(chatId, `Пара обновлена на ${text}`);
+            saveConfig();
             break;
         case 'edit_kline_quantity':
             try {
