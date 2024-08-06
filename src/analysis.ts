@@ -402,6 +402,7 @@ export function get_account(){
 export const stop_websocket=()=>{
     clearInterval(btc_dom_int_id!);
     candleWS.closeAll(false);
+    userWS.closeAll(false);
 }
 export function processCandles(configuration:Candle_Config[],pair:string,curr_chat:string){
     klines=[]

@@ -312,7 +312,6 @@ bot.on('callback_query', (callbackQuery) => {
 
         case 'stop':
             stop_websocket();
-            notify_atem("Бот был остановлен");
             if (chatMessageIds[chatId]) {
                 chatMessageIds[chatId].forEach((msgId) => {
                     bot.deleteMessage(chatId, msgId).catch((error) => {
@@ -322,6 +321,7 @@ bot.on('callback_query', (callbackQuery) => {
                 chatMessageIds[chatId] = [];
             }
             let stat_message = get_statistics();
+            notify_atem(`Бот был остановлен \n ${stat_message}`);
             bot.editMessageText(`Подключение к бирже остановлено, можешь свободно корректировать конфигурацию и перезапускать.\n Данные о сессии\n${stat_message}`, {
                 chat_id: chatId,
                 message_id: messageId,
