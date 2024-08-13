@@ -5,8 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "update-code": "git fetch origin && git pull origin/master && npm install",
-    "start": "npm run update-code && tsc && node out/start.js",
+    "update-code": "git pull && npm install",
+    "start": "npm run update-code && node out/tgbot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
