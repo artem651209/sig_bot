@@ -123,7 +123,7 @@ function updateFieldsFromAmount(amountInput, totalInput, slider, sliderValue,b_s
     const using_asset = b_s?amount:total;
     slider.value = (amount / using_balance * 100).toFixed(0); 
     sliderValue.textContent = `${slider.value}%`;
-    totalInput.value = total.toFixed(4);
+    totalInput.value = total.toFixed(2);
     order.quantity=amount;
     order.price=p;
     order.total=total;
@@ -146,7 +146,7 @@ function updateFieldsFromSlider(amountInput, totalInput, slider, sliderValue,b_s
     const percentage = slider.value;
     if(b_s){
         const amount  = (percentage / 100)*acc_data.base_balance;
-        amountInput.value = amount.toFixed(2);
+        amountInput.value = amount.toFixed(4);
         const total = amount * p;
         totalInput.value = total.toFixed(2);
         order.quantity=amount;
@@ -156,7 +156,7 @@ function updateFieldsFromSlider(amountInput, totalInput, slider, sliderValue,b_s
         const total = (percentage / 100)*acc_data.quote_balance;
         totalInput.value = total.toFixed(2);
         const amount = total * p;
-        amountInput.value = amount.toFixed(2);
+        amountInput.value = amount.toFixed(4);
         order.quantity=amount;
         order.price=p;
         order.total=total;
