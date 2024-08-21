@@ -107,10 +107,9 @@ const loadConfig = () => {
     return {};
 };
 export let current_config = loadConfig();
-console.log(current_config);
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id.toString();
-    notify_atem(`прошлая комманда старт у ${chatId}`);
+    notify_atem(`прошла комманда старт у ${chatId}`);
     await update_pair(current_config[chatId].pair);
     await upd_acc_info(true);
     bot.sendMessage(chatId, 'Привет! Я бот, который анализирует графики и индикаторы на Binance.').then(() => {
