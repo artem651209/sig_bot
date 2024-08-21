@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: 'out/config/.env' });
-const token = process.env.TG_TOKEN!;
+const token = process.env.VISNU_TOKEN!;
 const bot: TelegramBot = new TelegramBot(token, { polling: true });
 
 const __filename = fileURLToPath(import.meta.url);
