@@ -256,10 +256,7 @@ userWS.on('message', (data) => {
         else if (data.o === 'LIMIT') {
             updateBalances(current_account);
             let statusMessage = '';
-            if (data.X === 'PARTIALLY_FILLED') {
-                statusMessage = `Лимитный ордер на ${data.S} частично исполнен:\nИсполненное количество: ${quantity}\nЦена исполнения: ${price}\nОбщая стоимость: ${total.toFixed(2)}`;
-            }
-            else if (data.X === 'CANCELED') {
+            if (data.X === 'CANCELED') {
                 statusMessage = `Лимитный ордер на ${data.S} был отменен.`;
             }
             else if (data.X === 'REJECTED') {
@@ -425,8 +422,8 @@ export async function placeUserOrder(cur_order) {
         }
     }
     catch (e) {
-        console.log("ОШИБКА ПРИ ВЫСТАВЛЕНИИ ОРДЕРАы");
         console.log(e);
+        notify(cid, "Ошибка при выставлении ордера, глянь консоль");
     }
 }
 export function get_statistics() {
