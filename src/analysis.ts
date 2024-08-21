@@ -1,11 +1,12 @@
 import { Interval ,Spot,Side, OrderType, TimeInForce } from '@binance/connector-typescript';
-import { WebsocketClient } from 'binance';
+import { SymbolMinNotionalFilter, WebsocketClient } from 'binance';
 import { updateCharts,updateBalances } from './server.js';
 import { rsi, sma ,macd, bollingerbands} from 'technicalindicators';
 import {DateTime} from 'luxon';
 import { Candle,cOrder,acc_Data, Candle_Config } from './contracts.js';
 import {notify} from './tgbot.js';
 import * as dotenv from 'dotenv';
+import { Type } from 'typescript';
 dotenv.config({ path: 'out/config/.env' });
 
 let b_api_key; 
@@ -13,7 +14,7 @@ let b_secret_key;
 let api_client:Spot;
 let candleWS:WebsocketClient;
 let userWS:WebsocketClient;
-const use_test=false;
+const use_test=true;
 if(use_test){
     b_api_key = process.env.B_TEST_KEY;
     b_secret_key= process.env.B_TEST_SEC_KEY;
@@ -39,6 +40,7 @@ export const current_account:acc_Data={
     base_balance:0,
     quote_balance:0,
     prev_balance:0,
+    minnot:0
 };
 const user_LK=api_client.createListenKey();
 candleWS.on('open', (data) => {
@@ -238,25 +240,31 @@ candleWS.on('message', async (data) => {
       }
     }
 });
-userWS.on('message',(data)=>{
+userWS.on('message', (data) => {
     if (!Array.isArray(data) && data.e === 'executionReport') {
-        if(data.X=='FILLED' && data.o=='LIMIT'){
-            const ex_p=typeof(data.p)=="string"?parseFloat(data.p):data.p;
-            const ex_q=typeof(data.q)=="string"?parseFloat(data.q):data.q;
-            const tot=ex_p * ex_q;
-            const mess=`Лимитный ордер на ${data.S} был исполнен:\n
-                        Исполненное количество: ${data.I}\n
-                        Цена исполнения: ${data.p}\n
-                        Общая цена: ${tot}`
-            notify(cid,mess);
-        }else if(data.X!='PARTIALLY_FILLED' && data.o=='LIMIT' && data.X!='FILLED'){
-            const mess=`Лимитный ордер на ${data.S} не был исполнен:\n
-                        Установлення цена исполнения: ${data.p}\n
-                        Код ошибки: ${data.X}`
-            notify(cid,mess);
+        const price = typeof(data.p) === "string" ? parseFloat(data.p) : data.p;
+        const quantity = typeof(data.q) === "string" ? parseFloat(data.q) : data.q;
+        const total = price * quantity;
+        if (data.X === 'FILLED' && data.o === 'LIMIT') {
+            updateBalances(current_account);
+            const message = `Лимитный ордер на ${data.S} был исполнен:\nИсполненное количество: ${quantity}\nЦена исполнения: ${price}\nОбщая стоимость: ${total.toFixed(2)}`;
+            notify(cid, message);
+        } else if (data.o === 'LIMIT') {
+            updateBalances(current_account);
+            let statusMessage = '';
+            if (data.X === 'CANCELED') {
+                statusMessage = `Лимитный ордер на ${data.S} был отменен.`;
+            } else if (data.X === 'REJECTED') {
+                statusMessage = `Лимитный ордер на ${data.S} был отклонен.\nКод ошибки: ${data.X}`;
+            } else {
+                statusMessage = `Лимитный ордер на ${data.S} не был исполнен:\nУстановленная цена исполнения: ${price}\nКод ошибки: ${data.X}`;
+            }
+
+            notify(cid, statusMessage);
         }
     }
-})
+});
+
 async function start_g_a(current_candle:Candle) {
     let close_p:number[];
     let close_t:string[];
@@ -343,22 +351,54 @@ export async function upd_acc_info(start:boolean):Promise<void>{
                 current_account.quote_balance=parseFloat(quote_ass.free);}
             }
             current_account.prev_balance = current_account.base_balance;
+            current_account.minnot=await getMinNotional();
             console.log(current_account)
         }else{
             let base_ass = acc_info.find(ass => ass.asset === current_account.base_curr);
             let quote_ass=acc_info.find(ass => ass.asset === current_account.quote_curr);
             current_account.base_balance=parseFloat(base_ass!.free);
             current_account.quote_balance=parseFloat(quote_ass!.free);
+            current_account.minnot=await getMinNotional();
         }
     } catch (e) {
         console.log(e);
         current_account.base_balance = 0;
     }
 }
+interface MinNotionalFilter {
+    filterType: 'MIN_NOTIONAL';
+    minNotional: string; 
+    applyToMarket: boolean;
+    avgPriceMins: number;
+}
+
+async function getMinNotional(): Promise<number> {
+    try {
+        const symbol=current_account.current_pair
+        const exchangeInfo = await api_client.exchangeInformation({symbol:symbol});
+        const symbolInfo = exchangeInfo.symbols.find((s) => s.symbol === current_account.current_pair);
+        if (!symbolInfo) {
+            throw new Error(`Symbol ${symbol} not found.`);
+        }
+        const minNotionalFilter = symbolInfo.filters.find((f):f is MinNotionalFilter  => f.filterType === 'NOTIONAL');
+        if (!minNotionalFilter) {
+            throw new Error(`MIN_NOTIONAL filter not found for symbol ${symbol}.`);
+        }
+        return parseFloat(minNotionalFilter.minNotional);
+    } catch (error) {
+        console.log(error)
+        return 0;
+    }
+}
+
 export async function placeUserOrder(cur_order:cOrder){
     try{
         const action:Side=cur_order.action=="BUY"?Side.BUY:Side.SELL;
-        if(cur_order.type=="limit"){
+        const minNotional=current_account.minnot
+        if(minNotional>cur_order.total){
+            notify(cid,`Стоимость ордера меньше минимальной. Минимальная стоимость ордера:<code>${minNotional}</code>`)
+        }
+        else if(cur_order.type=="limit"){
             await api_client.newOrder(current_account.current_pair,action,OrderType.LIMIT,{timeInForce:TimeInForce.GTC,price:cur_order.price,quantity:cur_order.quantity,recvWindow:10000})
             await upd_acc_info(false)
             updateBalances(current_account)
@@ -371,6 +411,7 @@ export async function placeUserOrder(cur_order:cOrder){
         } 
     }catch(e){
         console.log(e)
+        notify(cid,"Ошибка при выставлении ордера, глянь консоль")
     }
 }
 export function get_statistics(){

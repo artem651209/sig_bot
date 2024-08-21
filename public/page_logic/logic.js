@@ -61,108 +61,128 @@ document.addEventListener('DOMContentLoaded', function() {
     const marketTotalInput = document.getElementById('market-total');
     const marketSlider = document.getElementById('percentageSlider-m');
     const marketSliderValue = document.getElementById('market-sliderValue');
-    const side_state = document.getElementById('BSswitch')
-    side_state.addEventListener('change',()=>{
-        order.action=side_state.checked?'SELL':'BUY'
-        console.log(order.action)
-    })
+    const side_state = document.getElementById('BSswitch');
+
+    side_state.addEventListener('change', () => {
+        order.action = side_state.checked ? 'SELL' : 'BUY';
+        console.log(order.action);
+        // Обновление всех полей при изменении стороны
+        updateFieldsFromAmount(limitAmountInput, limitTotalInput, limitSlider, limitSliderValue, side_state.checked, 0);
+        updateFieldsFromAmount(marketAmountInput, marketTotalInput, marketSlider, marketSliderValue, side_state.checked, 1);
+    });
+
     limitAmountInput.addEventListener('input', function() {
-        updateFieldsFromAmount(limitAmountInput, limitTotalInput, limitSlider, limitSliderValue,side_state.checked,0);
+        updateFieldsFromAmount(limitAmountInput, limitTotalInput, limitSlider, limitSliderValue, side_state.checked, 0);
     });
     limitTotalInput.addEventListener('input', function() {
-        updateFieldsFromTotal(limitAmountInput, limitTotalInput, limitSlider, limitSliderValue,side_state.checked,0);
+        updateFieldsFromTotal(limitAmountInput, limitTotalInput, limitSlider, limitSliderValue, side_state.checked, 0);
     });
     limitSlider.addEventListener('input', function() {
-        updateFieldsFromSlider(limitAmountInput, limitTotalInput, limitSlider, limitSliderValue,side_state.checked,0);
+        updateFieldsFromSlider(limitAmountInput, limitTotalInput, limitSlider, limitSliderValue, side_state.checked, 0);
     });
+
     marketAmountInput.addEventListener('input', function() {
-        updateFieldsFromAmount(marketAmountInput, marketTotalInput, marketSlider, marketSliderValue,side_state.checked);
+        updateFieldsFromAmount(marketAmountInput, marketTotalInput, marketSlider, marketSliderValue, side_state.checked, 1);
     });
     marketTotalInput.addEventListener('input', function() {
-        updateFieldsFromTotal(marketAmountInput, marketTotalInput, marketSlider, marketSliderValue,side_state.checked);
+        updateFieldsFromTotal(marketAmountInput, marketTotalInput, marketSlider, marketSliderValue, side_state.checked, 1);
     });
     marketSlider.addEventListener('input', function() {
-        updateFieldsFromSlider(marketAmountInput, marketTotalInput, marketSlider, marketSliderValue,side_state.checked);
+        updateFieldsFromSlider(marketAmountInput, marketTotalInput, marketSlider, marketSliderValue, side_state.checked, 1);
     });
 });
-socket.on('showInitialData', (initialData,acc) => {
-    if (initialData.interval == interval) {
+
+
+// Обработчики событий для обновления данных
+socket.on('showInitialData', (initialData, acc) => {
+    if (initialData.interval === interval) {
         candleData = initialData;
-        acc_data=acc;
-        document.getElementById('tradingPair').textContent=acc_data.current_pair;
-        document.getElementById('base_a').textContent=`${acc_data.base_curr} : ${acc_data.base_balance}`
-        document.getElementById('quote_a').textContent=`${acc_data.quote_curr} : ${acc_data.quote_balance}`
-        document.getElementById('lt').textContent=`Total in ${acc_data.quote_curr}`
-        document.getElementById('mt').textContent=`Total in ${acc_data.quote_curr}`
-        document.getElementById('la').textContent=`Amount in ${acc_data.base_curr}`
-        document.getElementById('ma').textContent=`Amount in ${acc_data.base_curr}`
-        cur_price=candleData.close_prices[candleData.close_prices.length-1]
-        document.getElementById('market-price').textContent=`Current price : ${candleData.close_prices[candleData.close_prices.length-1]}`
+        acc_data = acc;
+        document.getElementById('tradingPair').textContent = acc_data.current_pair;
+        document.getElementById('base_a').textContent = `${acc_data.base_curr} : ${acc_data.base_balance}`;
+        document.getElementById('quote_a').textContent = `${acc_data.quote_curr} : ${acc_data.quote_balance}`;
+        document.getElementById('lt').textContent = `Total in ${acc_data.quote_curr}`;
+        document.getElementById('mt').textContent = `Total in ${acc_data.quote_curr}`;
+        document.getElementById('la').textContent = `Amount in ${acc_data.base_curr}`;
+        document.getElementById('ma').textContent = `Amount in ${acc_data.base_curr}`;
+        cur_price = candleData.close_prices[candleData.close_prices.length - 1];
+        document.getElementById('market-price').textContent = `Current price : ${cur_price}`;
         setupMAControls(initialData.mas);
         initializeChart(initialData);
     }
 });
+
 socket.on('update', (candle, moved) => {
-    if (candle.interval == interval) {
+    if (candle.interval === interval) {
         candleData = candle;
-        cur_price=candleData.close_prices[candleData.close_prices.length-1]
-        document.getElementById('market-price').textContent=`Current price : ${candleData.close_prices[candleData.close_prices.length-1]}`
+        cur_price = candleData.close_prices[candleData.close_prices.length - 1];
+        document.getElementById('market-price').textContent = `Current price : ${cur_price}`;
         updateChart(candleData);
     }
 });
-socket.on('upd_acc',(acc)=>{
-    acc_data=acc
-    document.getElementById('base_a').textContent=`${acc_data.base_curr} : ${acc_data.base_balance}`
-    document.getElementById('quote_a').textContent=`${acc_data.quote_curr} : ${acc_data.quote_balance}`
+
+socket.on('upd_acc', (acc) => {
+    acc_data = acc;
+    document.getElementById('base_a').textContent = `${acc_data.base_curr} : ${acc_data.base_balance}`;
+    document.getElementById('quote_a').textContent = `${acc_data.quote_curr} : ${acc_data.quote_balance}`;
 });
-function updateFieldsFromAmount(amountInput, totalInput, slider, sliderValue,b_s,order_type=1) {
-    const p=order_type==1?cur_price:document.getElementById('limit-price').value;
-    const amount = amountInput.value;
-    const total = amount * p; 
-    const using_balance = b_s?acc_data.base_balance:acc_data.quote_balance;
-    const using_asset = b_s?amount:total;
-    slider.value = (amount / using_balance * 100).toFixed(0); 
-    sliderValue.textContent = `${slider.value}%`;
-    totalInput.value = total.toFixed(2);
-    order.quantity=amount;
-    order.price=p;
-    order.total=total;
-}
-function updateFieldsFromTotal(amountInput, totalInput, slider, sliderValue,b_s,order_type=1) {
-    const p=order_type==1?cur_price:document.getElementById('limit-price').value;
-    const total = totalInput.value;
-    const amount = total / p;
-    amountInput.value = amount.toFixed(4);
-    const using_balance = b_s?acc_data.base_balance:acc_data.quote_balance
-    const using_asset = b_s?amount:total;
-    slider.value = (amount / using_balance * 100).toFixed(0);
-    sliderValue.textContent = `${slider.value}%`;
-    order.quantity=amount;
-    order.price=p;
-    order.total=total;
-}
-function updateFieldsFromSlider(amountInput, totalInput, slider, sliderValue,b_s,order_type=1) {
-    const p=order_type==1?cur_price:document.getElementById('limit-price').value;
-    const percentage = slider.value;
+
+function updateFieldsFromAmount(amountInput, totalInput, slider, sliderValue, b_s, order_type = 1) {
+    const p = order_type == 1 ? cur_price : document.getElementById('limit-price').value;
+    const amount = parseFloat(amountInput.value);
+    const total = amount * p;
+    //SELL
     if(b_s){
-        const amount  = (percentage / 100)*acc_data.base_balance;
-        amountInput.value = amount.toFixed(4);
-        const total = amount * p;
-        totalInput.value = total.toFixed(2);
-        order.quantity=amount;
-        order.price=p;
-        order.total=total;
-    }else{
-        const total = (percentage / 100)*acc_data.quote_balance;
-        totalInput.value = total.toFixed(2);
-        const amount = total * p;
-        amountInput.value = amount.toFixed(4);
-        order.quantity=amount;
-        order.price=p;
-        order.total=total;
+        slider.value = ((amount / acc_data.base_balance) * 100).toFixed(0);
+    }else{//BUY
+        slider.value = ((total/acc_data.quote_balance) * 100).toFixed(0);
     }
-    sliderValue.textContent = `${percentage}%`;
+    sliderValue.textContent = `${slider.value}%`;
+    totalInput.value = total.toFixed(0);
+    order.quantity = amount;
+    order.price = p;
+    order.total = total;
 }
+
+function updateFieldsFromTotal(amountInput, totalInput, slider, sliderValue, b_s, order_type = 1) {
+    const p = order_type == 1 ? cur_price : document.getElementById('limit-price').value;
+    const total = parseFloat(totalInput.value);
+    const amount = total / p;
+    amountInput.value = amount.toFixed(0);
+    if(b_s){
+        slider.value = ((amount / acc_data.base_balance) * 100).toFixed(0);
+    }else{
+        slider.value = ((total/acc_data.quote_balance) * 100).toFixed(0);
+    }
+    sliderValue.textContent = `${slider.value}%`;
+    order.quantity = amount;
+    order.price = p;
+    order.total = total;
+}
+
+function updateFieldsFromSlider(amountInput, totalInput, slider, sliderValue, b_s, order_type = 1) {
+    const p = order_type == 1 ? cur_price : document.getElementById('limit-price').value;
+    const percentage = parseFloat(slider.value);
+
+    if (b_s) {//SELL
+        const amount = (percentage / 100) * acc_data.base_balance;
+        amountInput.value = amount.toFixed(0);
+        const total = amount * p;
+        totalInput.value = total.toFixed(0);
+    } else {//BUY
+        const total = (percentage / 100) * acc_data.quote_balance;
+        totalInput.value = total.toFixed(0);
+        const amount = total / p;
+        amountInput.value = amount.toFixed(0);
+    }
+
+    sliderValue.textContent = `${percentage}%`;
+
+    order.quantity = parseFloat(amountInput.value);
+    order.price = p;
+    order.total = parseFloat(totalInput.value);
+}
+
 function showSection(sectionId) {
     const sections = document.querySelectorAll('.section');
     const tabs = document.querySelectorAll('.tab');

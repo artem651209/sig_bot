@@ -6,7 +6,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: 'out/config/.env' });
-const token = process.env.VISNU_TOKEN;
+const token = process.env.TG_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -106,7 +106,7 @@ const loadConfig = () => {
     }
     return {};
 };
-export let current_config= '';
+export let current_config;
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id.toString();
     current_config = loadConfig();
@@ -114,7 +114,8 @@ bot.onText(/\/start/, async (msg) => {
         notify_atem(`прошла комманда старт у ${chatId}`);
         await update_pair(current_config[chatId].pair);
         await upd_acc_info(true);
-    } else {
+    }
+    else {
         notify_atem(`Конфигурация для chatId ${chatId} не найдена.`);
     }
     bot.sendMessage(chatId, 'Привет! Я бот, который анализирует графики и индикаторы на Binance.').then(() => {

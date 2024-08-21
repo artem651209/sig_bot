@@ -44,6 +44,7 @@ interface acc_Data{
     base_balance:number;
     quote_balance:number;
     prev_balance:number;
+    minnot:number
 }
 interface Candle_Config {
     candleSize: string;

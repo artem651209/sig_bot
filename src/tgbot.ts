@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: 'out/config/.env' });
-const token = process.env.VISNU_TOKEN!;
+const token = process.env.TG_TOKEN!;
 const bot: TelegramBot = new TelegramBot(token, { polling: true });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -123,13 +123,17 @@ const loadConfig = (): Bot_Config => {
     return {};
 };
 
-export let current_config = loadConfig();
-console.log(current_config)
-bot.onText(/\/start/,async  (msg) => {
-    const chatId = msg.chat.id.toString();
-    notify_atem(`прошлая комманда старт у ${chatId}`);
-    await update_pair(current_config[chatId].pair);
-    await upd_acc_info(true);
+export let current_config:Bot_Config;
+bot.onText(/\/start/, async (msg) => {
+    const chatId:string = msg.chat.id.toString();
+    current_config = loadConfig();
+    if (current_config[chatId]) {
+        notify_atem(`прошла комманда старт у ${chatId}`);
+        await update_pair(current_config[chatId].pair);
+        await upd_acc_info(true);
+    } else {
+        notify_atem(`Конфигурация для chatId ${chatId} не найдена.`);
+    }
     bot.sendMessage(chatId, 'Привет! Я бот, который анализирует графики и индикаторы на Binance.').then(() => {
         return bot.sendMessage(chatId, `Текущая пара: ${current_config[chatId].pair}`);
     }).then(() => {
@@ -137,20 +141,21 @@ bot.onText(/\/start/,async  (msg) => {
     }).then(() => {
         if (!current_config[chatId].cc || current_config[chatId].cc.length === 0) {
             return bot.sendMessage(chatId, 'Бот не настроен, перейди в настройки чтобы создать конфигурацию', start_choice_window);
-        } else {
-            let mess='\n';
-            current_config[chatId].cc.forEach(conf=>{
-                mess+=`Интервал выгружаемой свечи: ${conf.candleSize}\n
+        }
+        else {
+            let mess = '\n';
+            current_config[chatId].cc.forEach(conf => {
+                mess += `Интервал выгружаемой свечи: ${conf.candleSize}\n
                     Количество выгружаемых свечей: ${conf.quantity}\n
                     MA на графике имеют интервалы: ${conf.movingAverages}\n
                     Периоды MACD: ${conf.macdPeriods}\n
                     Период RSI: ${conf.rsiPeriod}\n
                     Конфигурация лент: Период ${conf.BB_period}, Стад. откл. ${conf.BB_dev}\n`;
-            })
+            });
             return bot.sendMessage(chatId, `Бот настроен, вот текущая конфигурация:\n 
             ${mess}если хочешь что-то изменить, перейди в настройки`, start_choice_window);
         }
-    })
+    });
 });
 
 export function notify(cid: string, mess: string): void {
