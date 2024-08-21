@@ -6,7 +6,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: 'out/config/.env' });
-const token = process.env.VISNU_TOKEN;
+const token = process.env.TG_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -107,6 +107,7 @@ const loadConfig = () => {
     return {};
 };
 export let current_config = loadConfig();
+console.log(current_config);
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id.toString();
     notify_atem(`прошлая комманда старт у ${chatId}`);

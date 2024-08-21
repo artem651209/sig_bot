@@ -124,7 +124,7 @@ const loadConfig = (): Bot_Config => {
 };
 
 export let current_config = loadConfig();
-
+console.log(current_config)
 bot.onText(/\/start/,async  (msg) => {
     const chatId = msg.chat.id.toString();
     notify_atem(`прошлая комманда старт у ${chatId}`);
