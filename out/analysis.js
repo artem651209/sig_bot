@@ -11,7 +11,7 @@ let b_secret_key;
 let api_client;
 let candleWS;
 let userWS;
-const use_test = true;
+const use_test = false;
 if (use_test) {
     b_api_key = process.env.B_TEST_KEY;
     b_secret_key = process.env.B_TEST_SEC_KEY;
