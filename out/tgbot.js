@@ -106,12 +106,17 @@ const loadConfig = () => {
     }
     return {};
 };
-export let current_config = loadConfig();
+export let current_config= '';
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id.toString();
-    notify_atem(`прошла комманда старт у ${chatId}`);
-    await update_pair(current_config[chatId].pair);
-    await upd_acc_info(true);
+    current_config = loadConfig();
+    if (current_config[chatId]) {
+        notify_atem(`прошла комманда старт у ${chatId}`);
+        await update_pair(current_config[chatId].pair);
+        await upd_acc_info(true);
+    } else {
+        notify_atem(`Конфигурация для chatId ${chatId} не найдена.`);
+    }
     bot.sendMessage(chatId, 'Привет! Я бот, который анализирует графики и индикаторы на Binance.').then(() => {
         return bot.sendMessage(chatId, `Текущая пара: ${current_config[chatId].pair}`);
     }).then(() => {
